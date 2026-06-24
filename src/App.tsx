@@ -23,12 +23,18 @@ function App() {
   const removeTodo = useMutation(api.todos.remove)
 
   const [text, setText] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmed = text.trim()
     if (!trimmed) return
-    addTodo({ text: trimmed })
-    setText('')
+    try {
+      await addTodo({ text: trimmed })
+      setText('') // only clear on success, so a failed write keeps your text
+      setError(null)
+    } catch {
+      setError('Could not add todo — is the backend running?')
+    }
   }
 
   return (
@@ -46,7 +52,7 @@ function App() {
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault()
-              handleAdd()
+              void handleAdd()
             }}
           >
             <Input
@@ -56,6 +62,9 @@ function App() {
             />
             <Button type="submit">Add</Button>
           </form>
+
+          {/* Surface any failed mutation instead of silently swallowing it */}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           {/* Todo list — three states: loading, empty, and populated */}
           {todos === undefined ? (
@@ -74,15 +83,17 @@ function App() {
                   <Checkbox
                     id={todo._id}
                     checked={todo.completed}
-                    onCheckedChange={() => toggleTodo({ id: todo._id })}
+                    onCheckedChange={() =>
+                      toggleTodo({ id: todo._id }).catch(() =>
+                        setError('Could not update todo.'),
+                      )
+                    }
                   />
                   <Label
                     htmlFor={todo._id}
-                    className={
-                      todo.completed
-                        ? 'flex-1 text-muted-foreground line-through'
-                        : 'flex-1'
-                    }
+                    className={`flex-1 ${
+                      todo.completed ? 'text-muted-foreground line-through' : ''
+                    }`}
                   >
                     {todo.text}
                   </Label>
@@ -91,7 +102,11 @@ function App() {
                     variant="ghost"
                     size="icon"
                     aria-label="Delete todo"
-                    onClick={() => removeTodo({ id: todo._id })}
+                    onClick={() =>
+                      removeTodo({ id: todo._id }).catch(() =>
+                        setError('Could not delete todo.'),
+                      )
+                    }
                   >
                     <XIcon />
                   </Button>

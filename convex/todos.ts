@@ -11,18 +11,23 @@ export const list = query({
 });
 
 // CREATE — add a new todo (starts uncompleted).
+// Validation lives HERE (the real trust boundary), not just in the UI —
+// any caller hitting the deployment directly goes through this.
 export const add = mutation({
   args: { text: v.string() },
   handler: async (ctx, args) => {
-    await ctx.db.insert("todos", {
-      text: args.text,
-      completed: false,
-    });
+    const text = args.text.trim();
+    if (text.length === 0) {
+      throw new Error("Todo text cannot be empty.");
+    }
+    if (text.length > 1000) {
+      throw new Error("Todo text is too long (max 1000 characters).");
+    }
+    await ctx.db.insert("todos", { text, completed: false });
   },
 });
 
 // UPDATE — flip a todo's completed state.
-// We read the current doc, then patch the opposite value.
 export const toggle = mutation({
   args: { id: v.id("todos") },
   handler: async (ctx, args) => {
@@ -32,10 +37,12 @@ export const toggle = mutation({
   },
 });
 
-// DELETE — remove a todo.
+// DELETE — remove a todo (no-op if it's already gone, mirroring `toggle`).
 export const remove = mutation({
   args: { id: v.id("todos") },
   handler: async (ctx, args) => {
+    const todo = await ctx.db.get(args.id);
+    if (!todo) return;
     await ctx.db.delete(args.id);
   },
 });
